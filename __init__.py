@@ -98,29 +98,24 @@ def on_pre_llm_call(
     _session_starts[sid] = (start_mono, start_wall, turn_count)
 
     # Build the injection line
+    # The signal is intentionally NEUTRAL — just facts. No urgency language.
+    # The model + SOUL.md decide what to do with it. We never suggest
+    # skipping quality gates or stopping legitimate long work.
     parts: list[str] = [f"[⏱ session: {elapsed_str} elapsed, turn #{turn_count}"]
 
-    # Add urgency markers based on thresholds
-    # IMPORTANT: never suggest bypassing quality gates. Long sessions are
-    # often legitimate (fixing review findings, iterating on tests). The
-    # signal is for self-awareness — am I stuck in a loop doing the same
-    # thing, or am I making steady progress?
+    # Add context at threshold boundaries — factual, not prescriptive.
+    # The model should ask itself "is my approach right?" not "should I stop?"
     if elapsed_min >= cfg["critical_minutes"]:
-        parts[0] = "[⏱ session"
         parts.append(
             f" — {elapsed_str}, {turn_count} turns since context start. "
-            "If you are making progress, continue. If you are stuck in a loop "
-            "repeating the same failed approach, pause and report the blocker "
-            "to the user. Do NOT skip tests, bypass hooks, or lower quality "
-            "standards regardless of elapsed time.]"
+            "Do NOT skip tests, bypass hooks, or lower quality standards. "
+            "Ask yourself: is the current approach the right one, or am I "
+            "treating a symptom while the root cause remains unaddressed?]"
         )
     elif elapsed_min >= cfg["warn_minutes"]:
-        parts[0] = "[⏱ session"
         parts.append(
             f" — {elapsed_str}, {turn_count} turns. "
-            "If you are making steady progress, ignore this. "
-            "If stuck on the same issue, consider escalating or "
-            "reporting to the user.]"
+            "Do NOT skip tests, bypass hooks, or lower quality standards.]"
         )
     else:
         parts.append("]")
