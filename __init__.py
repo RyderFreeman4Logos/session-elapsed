@@ -37,8 +37,8 @@ def _load_config() -> dict[str, Any]:
         plugin_cfg = {}
     _config_cache = {
         "enabled": plugin_cfg.get("enabled", True),
-        "warn_minutes": plugin_cfg.get("warn_minutes", 60),
-        "critical_minutes": plugin_cfg.get("critical_minutes", 180),
+        "warn_turns": plugin_cfg.get("warn_turns", 30),
+        "critical_turns": plugin_cfg.get("critical_turns", 80),
     }
     _config_loaded_at = now
     return _config_cache
@@ -92,7 +92,6 @@ def on_pre_llm_call(
     turn_count += 1
     elapsed_s = now_mono - start_mono
     elapsed_str = _format_elapsed(elapsed_s)
-    elapsed_min = elapsed_s / 60.0
 
     # Update state
     _session_starts[sid] = (start_mono, start_wall, turn_count)
@@ -105,14 +104,23 @@ def on_pre_llm_call(
 
     # Add context at threshold boundaries — factual, not prescriptive.
     # The model should ask itself "is my approach right?" not "should I stop?"
-    if elapsed_min >= cfg["critical_minutes"]:
+    #
+    # Thresholds use TURN COUNT, not elapsed time. This is deliberate:
+    # GPT models with high reasoning effort are slow per-turn (30s+), so
+    # a time-based threshold would flag legitimate review work. Turn count
+    # is model-speed-agnostic: 80 turns means 80 iterations regardless
+    # of whether each took 2s or 40s.
+    warn_turns = cfg["warn_turns"]
+    critical_turns = cfg["critical_turns"]
+
+    if turn_count >= critical_turns:
         parts.append(
             f" — {elapsed_str}, {turn_count} turns since context start. "
             "Do NOT skip tests, bypass hooks, or lower quality standards. "
             "Ask yourself: is the current approach the right one, or am I "
             "treating a symptom while the root cause remains unaddressed?]"
         )
-    elif elapsed_min >= cfg["warn_minutes"]:
+    elif turn_count >= warn_turns:
         parts.append(
             f" — {elapsed_str}, {turn_count} turns. "
             "Do NOT skip tests, bypass hooks, or lower quality standards.]"

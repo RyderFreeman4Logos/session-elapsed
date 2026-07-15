@@ -24,15 +24,25 @@ The plugin never tells the agent to stop, hurry, or skip quality gates. It provi
 - "Making progress" is not the right test — a review loop that burns 151M tokens without converging makes "progress" every round.
 - Time pressure can cause harmful behavior: skipping tests, bypassing hooks, lowering standards.
 
-The right question at high elapsed time is not *should I stop?* but *is my approach the right one?*
+The right question at high turn counts is not *should I stop?* but *is my approach the right one?*
+
+### Turn-based thresholds (not time-based)
+
+Thresholds use **turn count**, not elapsed wall-clock time. This is deliberate:
+
+- GPT models with high reasoning effort are slow per-turn (30s+ per API call). A time-based threshold would flag legitimate review work as problematic.
+- Turn count is model-speed-agnostic: 80 turns means 80 iterations regardless of whether each took 2s (GLM) or 40s (GPT xhigh).
+- This matters when mixing models: the main orchestrator on GLM, review subagents on GPT, implementation on Grok — all share the same turn-based thresholds.
+
+The elapsed time is still **displayed** for self-awareness, but threshold triggers use turns.
 
 ### Threshold behavior
 
-| Elapsed | Example output | Intent |
+| Turns | Example output | Intent |
 |---|---|---|
-| < 60 min | `[⏱ session: 23m elapsed, turn #8]` | Pure facts |
-| ≥ 60 min | `[⏱ session: 1h 12m elapsed, turn #31 — 1h 12m, 31 turns. Do NOT skip tests, bypass hooks, or lower quality standards.]` | Facts + quality-gate reminder |
-| ≥ 180 min | `[⏱ session: 3h 05m elapsed, turn #72 — 3h 05m, 72 turns since context start. Do NOT skip tests, bypass hooks, or lower quality standards. Ask yourself: is the current approach the right one, or am I treating a symptom while the root cause remains unaddressed?]` | Facts + approach-reflection prompt |
+| < 30 | `[⏱ session: 23m elapsed, turn #8]` | Pure facts |
+| ≥ 30 | `[⏱ session: 1h 12m elapsed, turn #31 — 1h 12m, 31 turns. Do NOT skip tests, bypass hooks, or lower quality standards.]` | Facts + quality-gate reminder |
+| ≥ 80 | `[⏱ session: 3h 05m elapsed, turn #80 — 3h 05m, 80 turns since context start. Do NOT skip tests, bypass hooks, or lower quality standards. Ask yourself: is the current approach the right one, or am I treating a symptom while the root cause remains unaddressed?]` | Facts + approach-reflection prompt |
 
 Thresholds are configurable (see below).
 
@@ -52,7 +62,7 @@ The plugin injects raw data. For the model to act on it, add a line to your `SOU
 When you see [⏱ session: Xh Ym elapsed, turn #N] at the end of a user message,
 treat it as a neutral self-check signal. Some tasks legitimately take hours.
 Long elapsed time is never a reason to skip tests, bypass hooks, or lower
-quality standards. When the elapsed time feels disproportionate to the task's
+quality standards. When the turn count feels disproportionate to the task's
 inherent complexity, the right response is to question your approach — not to
 rush, cut corners, or stop. Ask: am I treating symptoms while the root cause
 persists? Would a fundamentally different strategy converge faster?
@@ -82,8 +92,8 @@ Optional — works with sensible defaults. Add to `~/.hermes/config.yaml`:
 plugins:
   session-elapsed:
     enabled: true              # default: true
-    warn_minutes: 60           # add quality-gate reminder after this many minutes
-    critical_minutes: 180      # add approach-reflection prompt after this many minutes
+    warn_turns: 30             # add quality-gate reminder at this turn count
+    critical_turns: 80         # add approach-reflection prompt at this turn count
 ```
 
 To disable temporarily without uninstalling:
@@ -121,6 +131,7 @@ python3 test_plugin.py
 - **Existing sessions don't hot-reload**: Python caches the plugin module in `sys.modules`. Only new sessions (started after `hermes plugins enable`) load the current code.
 - **Elapsed time resets after compression**: This is by design. The signal tracks time within the current context window, not wall-clock session duration. For total session duration, the system prompt's `Conversation started: <date>` is the anchor.
 - **No persistence across restarts**: If the gateway restarts, all session timers reset. The first turn after restart shows `0s elapsed, turn #1`.
+- **Turn count counts `pre_llm_call` invocations**: One "turn" = one LLM API call from the agent loop. Tool-only actions that don't trigger `pre_llm_call` are not counted.
 
 ## License
 

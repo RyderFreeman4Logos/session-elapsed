@@ -55,7 +55,7 @@ def test_returns_context_dict():
 
 def test_disabled_returns_none():
     """When disabled, should return None."""
-    _session_elapsed._config_cache = {"enabled": False, "warn_minutes": 60, "critical_minutes": 180}
+    _session_elapsed._config_cache = {"enabled": False, "warn_turns": 30, "critical_turns": 80}
     _session_elapsed._config_loaded_at = time.monotonic()
     result = on_pre_llm_call(session_id="test-disabled")
     assert result is None
@@ -84,12 +84,34 @@ def test_separate_sessions():
 
 
 def test_normal_no_urgency():
-    """Under warn_minutes, should have plain marker."""
+    """Under warn_turns, should have plain marker."""
     _session_starts.clear()
     r = on_pre_llm_call(session_id="test-normal")
     assert "⏱" in r["context"]
-    assert "WARNING" not in r["context"]
-    assert "CRITICAL" not in r["context"]
+    assert "Do NOT" not in r["context"]
+
+
+def test_warn_threshold():
+    """At warn_turns (default 30), should include quality-gate reminder."""
+    _session_starts.clear()
+    # Simulate 30 turns
+    for _ in range(29):
+        on_pre_llm_call(session_id="test-warn")
+    r = on_pre_llm_call(session_id="test-warn")
+    assert "turn #30" in r["context"]
+    assert "Do NOT skip tests" in r["context"]
+    assert "root cause" not in r["context"]
+
+
+def test_critical_threshold():
+    """At critical_turns (default 80), should include approach-reflection prompt."""
+    _session_starts.clear()
+    for _ in range(79):
+        on_pre_llm_call(session_id="test-crit")
+    r = on_pre_llm_call(session_id="test-crit")
+    assert "turn #80" in r["context"]
+    assert "root cause" in r["context"]
+    assert "Do NOT skip tests" in r["context"]
 
 
 if __name__ == "__main__":
@@ -102,4 +124,6 @@ if __name__ == "__main__":
     test_turn_counter_increments()
     test_separate_sessions()
     test_normal_no_urgency()
+    test_warn_threshold()
+    test_critical_threshold()
     print("All tests passed!")
