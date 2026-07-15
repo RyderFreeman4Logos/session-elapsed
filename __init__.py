@@ -101,17 +101,26 @@ def on_pre_llm_call(
     parts: list[str] = [f"[⏱ session: {elapsed_str} elapsed, turn #{turn_count}"]
 
     # Add urgency markers based on thresholds
+    # IMPORTANT: never suggest bypassing quality gates. Long sessions are
+    # often legitimate (fixing review findings, iterating on tests). The
+    # signal is for self-awareness — am I stuck in a loop doing the same
+    # thing, or am I making steady progress?
     if elapsed_min >= cfg["critical_minutes"]:
-        parts[0] = "[⚠️ CRITICAL"
+        parts[0] = "[⏱ session"
         parts.append(
-            f"— session has run {elapsed_str} across {turn_count} turns; "
-            "strongly consider escalating, delegating, or stopping]"
+            f" — {elapsed_str}, {turn_count} turns since context start. "
+            "If you are making progress, continue. If you are stuck in a loop "
+            "repeating the same failed approach, pause and report the blocker "
+            "to the user. Do NOT skip tests, bypass hooks, or lower quality "
+            "standards regardless of elapsed time.]"
         )
     elif elapsed_min >= cfg["warn_minutes"]:
-        parts[0] = "[⏰ WARNING"
+        parts[0] = "[⏱ session"
         parts.append(
-            f"— session has run {elapsed_str} across {turn_count} turns; "
-            "consider whether continued effort is warranted]"
+            f" — {elapsed_str}, {turn_count} turns. "
+            "If you are making steady progress, ignore this. "
+            "If stuck on the same issue, consider escalating or "
+            "reporting to the user.]"
         )
     else:
         parts.append("]")
