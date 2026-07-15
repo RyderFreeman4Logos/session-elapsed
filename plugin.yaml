@@ -1,0 +1,7 @@
+name: session-elapsed
+version: "0.1.0"
+description: "Inject elapsed time and turn count into each user message via pre_llm_call hook. Helps the agent self-regulate long-running unattended sessions. Zero-config: works on first install. Configure thresholds under plugins.session-elapsed in config.yaml."
+author: RyderFreeman4Logos
+license: Apache-2.0
+hooks:
+  - pre_llm_call
